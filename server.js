@@ -1,11 +1,13 @@
 const express = require('express');
 const session = require('express-session');
 const jwt = require('jsonwebtoken');
+const NodeCache = require('node-cache')
 require('dotenv').config();
 
 const app = express();
 const port = 3000;
 const secret_key = process.env.SECRET_JWT;
+const cache = new NodeCache({stdTTL: 60});
 
 app.use(express.json());
 
@@ -21,11 +23,10 @@ const users = [
 ];
 
 const voitures = [
-    { marque: "Toyota", modele: "Corolla", annee: 2020 },
-    { marque: "Honda", modele: "Civic", annee: 2019 },
-    { marque: "Ford", modele: "Mustang", annee: 2021 },
-    { marque: "BMW", modele: "X5", annee: 2018 },
-    { marque: "Mercedes-Benz", modele: "C-Class", annee: 2022 }
+    {marque: "Toyota", modele: "Corolla", plaqueImmatriculation: "AB-123-CD", anneeFabrication: 2019},
+    {marque: "Ford", modele: "Focus", plaqueImmatriculation: "EF-456-GH", anneeFabrication: 2018},
+    {marque: "Honda", modele: "Civic", plaqueImmatriculation: "IJ-789-KL", anneeFabrication: 2020},
+    {marque: "Volkswagen", modele: "Golf", plaqueImmatriculation: "MN-012-OP", anneeFabrication: 2017}
 ];
 
 const expiresIn = '1h';
@@ -87,6 +88,33 @@ const require_auth_session = (request, response, next) => {
 
 app.get('/getmodeles', require_auth_session, (request, response) => {
     response.json(voitures.map(voiture => voiture.modele));
+});
+
+function check_data(request, response, next){
+    const{plaqueImmatriculation} = request.body;
+    const key = plaqueImmatriculation;
+    const cacheData = cache.get(key);
+
+    if(cacheData !== undefined){
+        response.json({cacheData,
+        message: 'Data send from cache : data from database'});
+    }else{
+        next();
+    }
+};
+
+app.get('/data', check_data, (request, response)=>{
+    const{plaqueImmatriculation} = request.body;
+    for (let i =0; i<voitures.length; i++){
+        const voiture = voitures[i];
+        if(voiture.plaqueImmatriculation == plaqueImmatriculation){
+            cache.set(plaqueImmatriculation,voiture);
+            response.json({
+                voiture,
+                message: 'Data send from server : data from database'
+            });
+        }
+    }
 });
 
 app.listen(port, () => {
